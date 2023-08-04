@@ -1,0 +1,149 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+
+#define QUEUE_SIZE 100
+#define NUM_CONSUMERS 5
+#define NUM_MESSAGES 25
+
+struct Queue {
+ char* data[QUEUE_SIZE];
+
+int front;
+ int rear;
+ int cnt;
+ pthread_mutex_t mutex;
+ pthread_cond_t full;
+ 
+ pthread_cond_t empty;
+};
+
+
+void initQueue(struct Queue* queue) {
+
+    queue->front = 0;
+queue->rear = -1;
+
+  queue->cnt = 0;
+
+  pthread_mutex_init(&queue->mutex, NULL);
+   pthread_cond_init(&queue->full, NULL);
+  pthread_cond_init(&queue->empty, NULL);
+}
+
+
+void destroyQueue(struct Queue* queue) {
+
+pthread_mutex_destroy(&queue->mutex);
+pthread_cond_destroy(&queue->full);
+   
+ pthread_cond_destroy(&queue->empty);
+}
+
+
+void enqueue(struct Queue* queue, const char* message) {
+  
+
+  pthread_mutex_lock(&queue->mutex);
+
+    // Waiting 
+  while (queue->cnt == QUEUE_SIZE) {
+   pthread_cond_wait(&queue->full, &queue->mutex);
+    }
+
+
+queue->rear = (queue->rear + 1) % QUEUE_SIZE;
+queue->data[queue->rear] = strdup(message);
+queue->cnt++;
+
+    //queue is not emty
+    pthread_cond_signal(&queue->empty);
+
+    pthread_mutex_unlock(&queue->mutex);
+}
+
+
+char* dequeue(struct Queue* queue) {
+    pthread_mutex_lock(&queue->mutex);
+
+// Wait if the queu is empty
+while (queue->cnt == 0) {
+pthread_cond_wait(&queue->empty, &queue->mutex);
+}
+
+    // Get msg 
+char* message = queue->data[queue->front];
+ queue->front = (queue->front + 1) % QUEUE_SIZE;
+  queue->cnt--;
+
+
+pthread_cond_signal(&queue->full);
+
+pthread_mutex_unlock(&queue->mutex);
+
+return message;
+}
+
+
+void* writerThread(void* arg) {
+
+struct Queue* queue = (struct Queue*)arg;
+int messagecnt = 0;
+
+while (messagecnt < NUM_MESSAGES) {
+char message[20];
+
+snprintf(message, sizeof(message), "Message %d", messagecnt);
+
+enqueue(queue, message);
+messagecnt++;
+
+usleep(200000);
+ }
+
+ pthread_exit(NULL);
+}
+
+
+void* consumerThread(void* arg) {
+  struct Queue* queue = (struct Queue*)arg;
+
+while (1) {
+char* message = dequeue(queue);
+printf("Consumer %lu: %s\n", pthread_self(), message);
+
+free(message);
+    }
+
+    pthread_exit(NULL);
+}
+
+int main() {
+struct Queue queue;
+initQueue(&queue);
+
+pthread_t writer;
+pthread_t consumers[NUM_CONSUMERS];
+
+
+pthread_create(&writer, NULL, writerThread, &queue);
+
+    // Create the consumer threads
+for (int i = 0; i < NUM_CONSUMERS; i++) {
+        pthread_create(&consumers[i], NULL, consumerThread, &queue);
+    }
+
+
+pthread_join(writer, NULL);
+
+for (int i = 0; i < NUM_CONSUMERS; i++) {
+pthread_cancel(consumers[i]);
+}
+
+destroyQueue(&queue);
+
+
+return 0;
+}
+

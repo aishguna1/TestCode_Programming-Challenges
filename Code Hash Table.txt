@@ -1,0 +1,146 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define INITIAL_SIZE 10
+#define LOAD_FACTOR_THRESHOLD 0.7
+
+
+typedef struct KeyValue {
+    char key[50];
+    char value[100];
+    struct KeyValue *next;
+} KeyValue;
+
+
+typedef struct HashTable {
+    int size;
+    int count;
+    KeyValue **array;
+} HashTable;
+
+
+int hashFunction(const char *key, int tableSize) {
+    int sum = 0;
+    for (int i = 0; key[i] != '\0'; i++) {
+        sum += key[i];
+    }
+    return sum % tableSize;
+}
+
+
+KeyValue *createPair(const char *key, const char *value) {
+    KeyValue *newPair = (KeyValue *)malloc(sizeof(KeyValue));
+    if (newPair != NULL) {
+        strcpy(newPair->key, key);
+        strcpy(newPair->value, value);
+        newPair->next = NULL;
+    }
+    return newPair;
+}
+
+
+HashTable *initializeTable() {
+    HashTable *hashTable = (HashTable *)malloc(sizeof(HashTable));
+    if (hashTable != NULL) {
+        hashTable->size = INITIAL_SIZE;
+        hashTable->count = 0;
+        hashTable->array = (KeyValue **)calloc(INITIAL_SIZE, sizeof(KeyValue *));
+    }
+    return hashTable;
+}
+
+
+void resizeTable(HashTable *hashTable) {
+    int newSize = hashTable->size * 2;
+    KeyValue **newArray = (KeyValue **)calloc(newSize, sizeof(KeyValue *));
+    if (newArray != NULL) {
+      for (int i = 0; i < hashTable->size; i++) {
+        KeyValue *currentPair = hashTable->array[i];
+            while (currentPair != NULL) {
+           KeyValue *nextPair = currentPair->next;
+             int newIndex = hashFunction(currentPair->key, newSize);
+          currentPair->next = newArray[newIndex];
+          newArray[newIndex] = currentPair;
+             currentPair = nextPair;
+            }
+        }
+     free(hashTable->array);
+     hashTable->array = newArray;
+      hashTable->size = newSize;
+    }
+}
+
+void insert(HashTable *hashTable, const char *key, const char *value) {
+    int index = hashFunction(key, hashTable->size);
+    KeyValue *newPair = createPair(key, value);
+    if (newPair != NULL) {
+        if (hashTable->array[index] == NULL) {
+        
+            hashTable->array[index] = newPair;
+        } else {
+       
+            newPair->next = hashTable->array[index];
+            hashTable->array[index] = newPair;
+        }
+        hashTable->count++;
+
+        double loadFactor = (double)hashTable->count / hashTable->size;
+        if (loadFactor > LOAD_FACTOR_THRESHOLD) {
+            resizeTable(hashTable);
+        }
+    }
+}
+
+
+const char *lookup(HashTable *hashTable, const char *key) {
+    int index = hashFunction(key, hashTable->size);
+    KeyValue *currentPair = hashTable->array[index];
+    while (currentPair != NULL) {
+        if (strcmp(currentPair->key, key) == 0) {
+            return currentPair->value;
+        }
+        currentPair = currentPair->next;
+    }
+    return NULL; 
+}
+
+
+void destroyTable(HashTable *hashTable) {
+    for (int i = 0; i < hashTable->size; i++) {
+        KeyValue *currentPair = hashTable->array[i];
+        while (currentPair != NULL) {
+            KeyValue *nextPair = currentPair->next;
+            free(currentPair);
+            currentPair = nextPair;
+        }
+    }
+    free(hashTable->array);
+    free(hashTable);
+}
+
+
+int main() {
+    HashTable *hashTable = initializeTable();
+
+    insert(hashTable, "name", "Aish");
+    insert(hashTable, "age", "30");
+    insert(hashTable, "city", "Germany");
+	
+    printf("Name: %s\n", lookup(hashTable, "name"));
+    printf("Age: %s\n", lookup(hashTable, "age"));
+    printf("City: %s\n", lookup(hashTable, "city"));
+    printf("Country: %s\n", lookup(hashTable, "country")); 
+	
+	
+	
+    insert(hashTable, "job", "Engineer");
+    insert(hashTable, "gender", "Female");
+    insert(hashTable, "hobby", "Drawing");
+    printf("Hobby: %s\n", lookup(hashTable, "hobby"));
+	
+	
+	
+    destroyTable(hashTable);
+    return 0;
+}
